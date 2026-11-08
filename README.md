@@ -24,7 +24,8 @@ A lightweight, cross-platform CLI tool to clean unnecessary directories from dev
 - **Cross-platform:** runs natively on Windows, Linux, and inside WSL.
 - **Automatic backend selection:** the right filesystem implementation is picked from the workspace path.
 - **Windows → WSL support:** clean Linux filesystems from Windows without leaving the terminal.
-- **Configurable targets:** defaults to `node_modules`, `.next`, and `dist`, and accepts custom targets.
+- **Target presets:** defaults to five safe directories and ships presets for Node, Python, Rust, Java, .NET, Elixir, and Terraform.
+- **Monorepo aware:** `--depth` reaches nested projects and `--exclude` skips paths by glob.
 - **Safe by default:** asks for confirmation, supports `--dry-run`, skips symlinks and junctions, and refuses to scan a filesystem root.
 - **Per-operation reporting:** failures are reported per project instead of aborting the whole run.
 - **Live progress:** a spinner and elapsed timer show that a long cleanup is still running.
@@ -142,7 +143,7 @@ would remove app-b/.next
 3 matched (3 projects) [dry run]
 ```
 
-The first line shows the tool version, the selected backend, and the workspace you passed. Nothing has been deleted; the `[dry run]` marker confirms it. The order of the lines depends on the filesystem; the counts are what matter.
+The first line shows the tool version, the selected backend, and the workspace you passed. Nothing has been deleted; the `[dry run]` marker confirms it. Lines are sorted by project path, and the counts are what matter.
 
 ### 3. Run the cleanup for real
 
@@ -236,15 +237,54 @@ dev-cleaner 1.0.0 | wsl:Ubuntu | /home/me/workspace
 
 You can also pass a Windows UNC path such as `//wsl.localhost/Ubuntu/home/me/workspace`; the distribution is read from the path.
 
+### Tutorial: use presets
+
+`--preset` adds a whole ecosystem on top of the defaults:
+
+```bash
+dev-cleaner -w /home/me/workspace --preset python --preset rust -n
+```
+
+Run `dev-cleaner --list-presets` to see every preset and its directories. `--preset deps` is opt-in because it removes `.venv`, `vendor`, `Pods`, and other directories that are regenerable but expensive to recreate.
+
+Use `--add-target` when you want the defaults plus one extra directory:
+
+```bash
+dev-cleaner -w /home/me/workspace --add-target coverage -n
+```
+
+### Tutorial: scan a monorepo
+
+By default only direct children of the workspace are treated as projects. Use `--depth` for nested layouts:
+
+```bash
+dev-cleaner -w /home/me/workspace --depth 3 -n
+```
+
+Projects are reported by their relative path:
+
+```text
+would remove apps/web/node_modules
+would remove packages/ui/dist
+
+2 matched (7 projects) [dry run]
+```
+
+Skip projects with `--exclude`. The glob matches the relative path or the directory name, so `legacy-*` catches `apps/legacy-app` at any depth:
+
+```bash
+dev-cleaner -w /home/me/workspace --depth 2 --exclude "legacy-*" -n
+```
+
 ### Tutorial: use custom targets
 
-Passing `-t` **replaces** the default target list, so list every directory you want to remove:
+Passing `-t` **replaces** the default target list and any preset, so list every directory you want to remove:
 
 ```bash
 dev-cleaner -w /home/me/workspace -t node_modules -t .venv -t target -n
 ```
 
-This removes only `node_modules`, `.venv`, and `target`; it does not also remove `.next` or `dist`.
+This removes only `node_modules`, `.venv`, and `target`; it does not also remove `.next`, `dist`, `__pycache__`, or anything else.
 
 ### Tutorial: use it in a script
 
@@ -279,7 +319,12 @@ dev-cleaner -w <workspace> [options]
 | Option | Description |
 |---|---|
 | `-w`, `--workspace` | Workspace directory to scan. Required. |
-| `-t`, `--target` | Directory to remove. Repeatable; replaces the defaults. Defaults to `node_modules`, `.next`, `dist`. |
+| `-t`, `--target` | Directory to remove. Repeatable; replaces the defaults and any preset. Defaults to `node_modules`, `.next`, `dist`, `__pycache__`, `target`. |
+| `--preset` | Add a preset group. Repeatable. Choices: `node`, `python`, `rust`, `java`, `dotnet`, `elixir`, `terraform`, `all`, `deps`. Mutually exclusive with `-t`. |
+| `--add-target` | Add one directory to the defaults, `-t`, or `--preset`. Repeatable. |
+| `--list-presets` | List every preset and the defaults, then exit. |
+| `--depth` | How many directory levels to scan for projects. Defaults to `1`. |
+| `--exclude` | Skip projects whose relative path or name matches the glob. Repeatable. |
 | `-b`, `--backend` | Force `native` or `wsl`. Auto-detected by default. |
 | `-d`, `--distribution` | WSL distribution to use. Defaults to the WSL default distribution, or `Ubuntu`. |
 | `-n`, `--dry-run` | Show what would be removed without deleting anything. |
@@ -314,11 +359,11 @@ While scanning or deleting, the CLI shows one animated line with the directory b
 
 1. Detects the backend from the workspace path (unless `--backend` is given).
 2. Maps the workspace to a scan path and, for WSL, to the equivalent Linux path.
-3. Lists the direct children of the workspace as projects.
+3. Walks the workspace up to `--depth` levels and treats every directory as a project.
 4. Checks each project for the configured target directories.
 5. Removes matching directories using the selected backend, reporting every operation.
 
-Only direct children of the workspace are treated as projects, and only direct children of each project are removed. Symlinked projects and targets, as well as Windows directory junctions, are skipped.
+With the default `--depth 1`, only direct children of the workspace are projects. Nested scanning never descends into `.git` or into generated directories such as `node_modules`, `dist`, and `target`. Only direct children of each project are removed. Symlinked projects and targets, as well as Windows directory junctions, are skipped.
 
 ## Development
 
@@ -417,7 +462,7 @@ Before running the application, make sure that:
 - The target directories are the ones you intend to remove.
 - The selected backend matches your environment.
 
-Use `--dry-run` first to review what will be removed. Symlinked projects and targets are skipped, and the tool refuses to scan a filesystem root. Only direct children of the workspace are considered, so pointing `-w` at a folder that contains projects is safer than pointing it at a single project.
+Use `--dry-run` first to review what will be removed. Symlinked projects and targets are skipped, and the tool refuses to scan a filesystem root. With the default `--depth 1` only direct children of the workspace are considered, so pointing `-w` at a folder that contains projects is safer than pointing it at a single project. Use `--depth` for nested layouts.
 
 ## Troubleshooting
 
@@ -428,7 +473,7 @@ Use `--dry-run` first to review what will be removed. Symlinked projects and tar
 | `Error: Refusing to scan a filesystem root: ...` | Pass the folder that contains your projects, not `/`, `C:\`, or a WSL distribution root. |
 | `Error: Invalid target directory: ...` | Targets must be a single directory name. Do not use paths such as `src/dist` or `..`. |
 | `failed ... [WinError 32]` or `Permission denied` | A file is open or read-only. Close editors, dev servers, and terminals using the directory, then retry. |
-| Nothing is removed | Only direct children of the workspace are scanned. Point `-w` at the folder containing your project folders. |
+| Nothing is removed | Only direct children of the workspace are scanned by default. Point `-w` at the folder containing your project folders, or raise `--depth`. |
 | Paths with spaces do not work | Quote the path: `-w "C:/Users/me/My Projects"`. |
 | Colors look wrong or appear as escape codes | Set `NO_COLOR=1`, or use a terminal with ANSI support. |
 | No spinner or timer appears | The spinner is TTY-only. It is hidden when output is piped or redirected, and when `TERM=dumb`. Run the tool directly in a terminal to see it. |
