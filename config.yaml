@@ -1,0 +1,11 @@
+name: dev-cleaner
+version: 1.0.0
+
+config:
+  target_folders:
+    - node_modules
+    - .next
+    - dist
+
+  workspace_path: 'C:\Users\adone\OneDrive\Desktop\workspace'
+  cleanup_backend: native
