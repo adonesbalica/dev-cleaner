@@ -1,7 +1,8 @@
 import os
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from unittest.mock import Mock
 
 from dev_cleaner.core.cleaner import Cleaner
 
@@ -110,6 +111,39 @@ class ExcludeTests(CleanerTestCase):
 
 
 class RunTests(CleanerTestCase):
+    def test_failed_removal_is_reported_and_other_targets_continue(self):
+        failed = self.make("app", "node_modules")
+        succeeded = self.make("app", "dist")
+        self.filesystem.remove = Mock(side_effect=[PermissionError("locked"), None])
+
+        report = self.cleaner(targets=["node_modules", "dist"]).run()
+
+        self.assertEqual(report.projects_scanned, 1)
+        self.assertEqual([result.path for result in report.failed], [failed])
+        self.assertEqual(report.failed[0].error, "locked")
+        self.assertEqual([result.path for result in report.removed], [succeeded])
+        self.assertEqual(self.filesystem.remove.call_count, 2)
+
+    def test_wsl_removal_uses_posix_workspace_and_nested_project_path(self):
+        self.make("packages", "app", "node_modules")
+        expected = PurePosixPath("/home/user/projects/packages/app/node_modules")
+
+        report = self.cleaner(depth=2, wsl_workspace_path="/home/user/projects").run()
+
+        self.assertEqual(self.filesystem.removed, [expected])
+        self.assertEqual(report.removed[0].path, expected)
+
+    def test_target_files_are_preserved(self):
+        project = self.make("app")
+        target = project / "node_modules"
+        target.write_text("keep this file", encoding="utf-8")
+
+        report = self.cleaner().run()
+
+        self.assertEqual(report.results, [])
+        self.assertEqual(self.filesystem.removed, [])
+        self.assertEqual(target.read_text(encoding="utf-8"), "keep this file")
+
     def test_nested_targets_are_reported_with_the_relative_label(self):
         self.make("packages", "app", "node_modules")
 

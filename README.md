@@ -12,6 +12,7 @@ A lightweight, cross-platform CLI tool to clean unnecessary directories from dev
 - [Installation](#installation)
 - [Tutorial](#tutorial)
 - [Usage](#usage)
+- [Workspace configuration](#workspace-configuration)
 - [Development](#development)
 - [Project structure](#project-structure)
 - [Architecture](#architecture)
@@ -26,6 +27,7 @@ A lightweight, cross-platform CLI tool to clean unnecessary directories from dev
 - **Windows → WSL support:** clean Linux filesystems from Windows without leaving the terminal.
 - **Target presets:** defaults to five safe directories and ships presets for Node, Python, Rust, Java, .NET, Elixir, and Terraform.
 - **Monorepo aware:** `--depth` reaches nested projects and `--exclude` skips paths by glob.
+- **Workspace configuration:** save presets, extra targets, exclusions, and scan depth in `.dev-cleaner.toml`; create a commented template with `--init`.
 - **Safe by default:** asks for confirmation, supports `--dry-run`, skips symlinks and junctions, and refuses to scan a filesystem root.
 - **Per-operation reporting:** failures are reported per project instead of aborting the whole run.
 - **Live progress:** a spinner and elapsed timer show that a long cleanup is still running.
@@ -134,7 +136,7 @@ dev-cleaner -w "$demo" -n
 Expected output:
 
 ```text
-dev-cleaner 1.0.0 | native | <workspace>
+dev-cleaner 1.2.0 | native | <workspace>
 
 would remove app-a/node_modules
 would remove app-a/dist
@@ -156,7 +158,7 @@ dev-cleaner -w "$demo" -y
 Expected output:
 
 ```text
-dev-cleaner 1.0.0 | native | <workspace>
+dev-cleaner 1.2.0 | native | <workspace>
 
 removed      app-a/node_modules
 removed      app-a/dist
@@ -176,7 +178,7 @@ The line is erased when the run finishes, and the summary appends the total time
 Without `-y`, the tool asks first:
 
 ```text
-Remove node_modules, .next, dist from every project? [y/N]
+Remove node_modules, .next, dist, __pycache__, target from every project? [y/N]
 ```
 
 Press `y` and Enter to continue, or Enter to cancel. The default is always **No**.
@@ -232,7 +234,7 @@ dev-cleaner -w /home/me/workspace -y
 The header shows which backend and distribution were selected:
 
 ```text
-dev-cleaner 1.0.0 | wsl:Ubuntu | /home/me/workspace
+dev-cleaner 1.2.0 | wsl:Ubuntu | /home/me/workspace
 ```
 
 You can also pass a Windows UNC path such as `//wsl.localhost/Ubuntu/home/me/workspace`; the distribution is read from the path.
@@ -318,13 +320,16 @@ dev-cleaner -w <workspace> [options]
 
 | Option | Description |
 |---|---|
-| `-w`, `--workspace` | Workspace directory to scan. Required. |
+| `-w`, `--workspace` | Workspace directory to scan. Required for cleanup; optional for `--list-presets`, `--help`, `--version`, or `--init --config PATH`. |
 | `-t`, `--target` | Directory to remove. Repeatable; replaces the defaults and any preset. Defaults to `node_modules`, `.next`, `dist`, `__pycache__`, `target`. |
 | `--preset` | Add a preset group. Repeatable. Choices: `node`, `python`, `rust`, `java`, `dotnet`, `elixir`, `terraform`, `all`, `deps`. Mutually exclusive with `-t`. |
 | `--add-target` | Add one directory to the defaults, `-t`, or `--preset`. Repeatable. |
 | `--list-presets` | List every preset and the defaults, then exit. |
 | `--depth` | How many directory levels to scan for projects. Defaults to `1`. |
 | `--exclude` | Skip projects whose relative path or name matches the glob. Repeatable. |
+| `--config` | Read a specific TOML configuration file instead of `<workspace>/.dev-cleaner.toml`. With `--init`, write the template to this path. Mutually exclusive with `--no-config`. |
+| `--no-config` | Ignore the workspace configuration file. |
+| `--init` | Write a commented configuration template and exit. Refuses to overwrite an existing file. |
 | `-b`, `--backend` | Force `native` or `wsl`. Auto-detected by default. |
 | `-d`, `--distribution` | WSL distribution to use. Defaults to the WSL default distribution, or `Ubuntu`. |
 | `-n`, `--dry-run` | Show what would be removed without deleting anything. |
@@ -352,18 +357,76 @@ While scanning or deleting, the CLI shows one animated line with the directory b
 |---|---|
 | `0` | Success, including "nothing to remove" and a cancelled prompt. |
 | `1` | Error: invalid workspace, invalid target, failed removal, or WSL unavailable. |
-| `2` | Invalid command-line arguments. |
+| `2` | Invalid command-line arguments or configuration; also returned when configuration initialization fails. |
 | `130` | Interrupted with Ctrl+C. |
 
 ### How it works
 
 1. Detects the backend from the workspace path (unless `--backend` is given).
 2. Maps the workspace to a scan path and, for WSL, to the equivalent Linux path.
-3. Walks the workspace up to `--depth` levels and treats every directory as a project.
-4. Checks each project for the configured target directories.
-5. Removes matching directories using the selected backend, reporting every operation.
+3. Loads workspace configuration and combines it with command-line options.
+4. Walks the workspace up to the configured depth and treats every eligible directory as a project.
+5. Checks each project for the configured target directories.
+6. Removes matching directories using the selected backend, reporting every operation.
 
 With the default `--depth 1`, only direct children of the workspace are projects. Nested scanning never descends into `.git` or into generated directories such as `node_modules`, `dist`, and `target`. Only direct children of each project are removed. Symlinked projects and targets, as well as Windows directory junctions, are skipped.
+
+## Workspace configuration
+
+The CLI automatically reads `.dev-cleaner.toml` from the workspace passed with `-w`. A missing default configuration file is allowed. Configuration uses top-level TOML keys, without a section header.
+
+Create a commented template, then uncomment the settings you need:
+
+```bash
+dev-cleaner -w /home/me/workspace --init
+```
+
+For example:
+
+```toml
+presets = ["node", "python"]
+add_targets = ["coverage"]
+exclude = ["legacy-*", "packages/archived"]
+depth = 2
+```
+
+Preview cleanup using those settings:
+
+```bash
+dev-cleaner -w /home/me/workspace -n
+```
+
+| Key | Meaning |
+|---|---|
+| `presets` | List of preset names added to the default targets. Defaults to an empty list. |
+| `add_targets` | List of extra directory names to remove. Defaults to an empty list. |
+| `exclude` | List of project globs matching relative paths or directory names. Excluded directories are also skipped during nested scanning. Defaults to an empty list. |
+| `depth` | Integer of at least `1` controlling project scan depth. Defaults to `1`. |
+
+Command-line settings combine with the file as follows:
+
+- `--depth` overrides the configured depth.
+- One or more `--preset` options replace the configured preset list.
+- `-t` replaces the defaults and all presets, including configured presets.
+- `--add-target` and configured `add_targets` are combined, even with `-t`. Duplicate targets are removed.
+- `--exclude` and configured `exclude` are combined.
+
+Use a different configuration file or ignore configuration entirely:
+
+```bash
+dev-cleaner -w /home/me/workspace --config ./cleanup.toml -n
+dev-cleaner -w /home/me/workspace --no-config -n
+```
+
+An explicit `--config` file must exist. Relative configuration paths are resolved from the current working directory. To create a template at an explicit path, no workspace is needed:
+
+```bash
+dev-cleaner --init --config ./cleanup.toml
+```
+
+Initialization never overwrites an existing file and requires the parent directory to exist. Invalid TOML, unknown keys or presets, and invalid value types produce an error with exit code `2`.
+
+The generated template also contains a commented `min_size` setting. The current version accepts this key as a non-empty string but does not apply size filtering during cleanup.
 
 ## Development
 
@@ -401,11 +464,19 @@ Run the CLI without the console script:
 python -m dev_cleaner --help
 ```
 
+Run the test suite using Python's built-in `unittest` runner; no additional test package is needed:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The tests cover target presets, configuration, argument parsing, project discovery, cleanup reporting, the CLI, and native/WSL backends. Filesystem fixtures use temporary workspaces, and backend unit tests mock deletion and WSL commands. Symlink tests that require Windows privileges are skipped on Windows.
+
 Run the checks and build the distribution:
 
 ```bash
-ruff check src
-ruff format --check src
+ruff check src tests
+ruff format --check src tests
 python -m build
 ```
 
@@ -422,7 +493,9 @@ dev-cleaner/
 │       ├── main.py
 │       ├── core/
 │       │   ├── __init__.py
-│       │   └── cleaner.py
+│       │   ├── catalog.py
+│       │   ├── cleaner.py
+│       │   └── config.py
 │       ├── cleaners/
 │       │   ├── __init__.py
 │       │   ├── base.py
@@ -432,6 +505,14 @@ dev-cleaner/
 │           ├── __init__.py
 │           ├── interface.py
 │           └── parser.py
+├── tests/
+│   ├── test_backends.py
+│   ├── test_catalog.py
+│   ├── test_cleaner.py
+│   ├── test_config.py
+│   ├── test_interface.py
+│   ├── test_main.py
+│   └── test_parser.py
 ├── pyproject.toml
 ├── README.md
 ├── RELEASING.md
@@ -447,6 +528,8 @@ The project uses a strategy-based architecture to separate cleanup orchestration
 - **`NativeCleaner`:** uses `shutil.rmtree` on the filesystem the application runs on (Windows or Linux), including retries for read-only files.
 - **`WslCleaner`:** runs `wsl -d <distribution> -- rm -rf` to remove directories inside a Linux filesystem from Windows.
 - **`Cleaner`:** handles workspace scanning, project detection, WSL path mapping, dry runs, and cleanup orchestration.
+- **`core/catalog.py`:** defines default targets, ecosystem presets, and directories pruned during scanning.
+- **`core/config.py`:** reads and validates workspace TOML configuration and writes the commented template.
 - **`main.py`:** detects the backend, resolves the workspace paths, and wires everything together.
 - **`cli/`:** parses arguments, shows the TTY-only spinner and timer, and prints plain-text results, a summary, and the confirmation prompt. No third-party dependencies.
 
@@ -472,6 +555,7 @@ Use `--dry-run` first to review what will be removed. Symlinked projects and tar
 | `Error: The wsl backend requires Windows with WSL installed.` | You forced `-b wsl` on Linux. Remove `-b wsl`; Linux paths already work with the native backend. |
 | `Error: Refusing to scan a filesystem root: ...` | Pass the folder that contains your projects, not `/`, `C:\`, or a WSL distribution root. |
 | `Error: Invalid target directory: ...` | Targets must be a single directory name. Do not use paths such as `src/dist` or `..`. |
+| Configuration errors or unexpected targets | Check `<workspace>/.dev-cleaner.toml` or the file passed with `--config`. Use `--no-config -n` to preview without configuration. Unknown keys and invalid values return exit code `2`. |
 | `failed ... [WinError 32]` or `Permission denied` | A file is open or read-only. Close editors, dev servers, and terminals using the directory, then retry. |
 | Nothing is removed | Only direct children of the workspace are scanned by default. Point `-w` at the folder containing your project folders, or raise `--depth`. |
 | Paths with spaces do not work | Quote the path: `-w "C:/Users/me/My Projects"`. |
