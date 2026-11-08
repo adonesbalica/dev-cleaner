@@ -10,6 +10,13 @@ from dev_cleaner.cli.interface import CLI
 from dev_cleaner.cli.parser import create_parser
 from dev_cleaner.core.catalog import resolve_targets
 from dev_cleaner.core.cleaner import Cleaner
+from dev_cleaner.core.config import (
+    CONFIG_FILENAME,
+    Config,
+    ConfigError,
+    load_config,
+    write_default_config,
+)
 
 DEFAULT_DISTRIBUTION = "Ubuntu"
 WSL_UNC_HOST = "wsl.localhost"
@@ -140,6 +147,32 @@ def resolve_workspace(
     return scan_path, linux_path.as_posix(), distribution
 
 
+def init_config(args, workspace_path: Path) -> int:
+    if args.config:
+        path = Path(args.config)
+    else:
+        path = workspace_path / CONFIG_FILENAME
+
+    try:
+        write_default_config(path)
+    except ConfigError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
+
+    print(f"Wrote {path}")
+    return 0
+
+
+def load_config_for(args, workspace_path: Path) -> Config:
+    if args.no_config:
+        return Config()
+
+    if args.config:
+        return load_config(Path(args.config), required=True)
+
+    return load_config(workspace_path / CONFIG_FILENAME)
+
+
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
@@ -148,30 +181,35 @@ def main() -> int:
         CLI().show_presets()
         return 0
 
-    if not args.workspace:
+    if not args.workspace and not (args.init and args.config):
         parser.error("the following arguments are required: -w/--workspace")
 
     try:
-        backend = args.backend or detect_backend(args.workspace)
+        backend = args.backend or detect_backend(args.workspace or ".")
 
         workspace_path, wsl_workspace_path, distribution = resolve_workspace(
-            workspace=args.workspace,
+            workspace=args.workspace or ".",
             backend=backend,
             distribution=args.distribution,
         )
+
+        if args.init:
+            return init_config(args, workspace_path)
+
+        config = load_config_for(args, workspace_path)
 
         cleaner = Cleaner(
             workspace_path=workspace_path,
             target_folders=resolve_targets(
                 args.targets,
-                args.presets,
-                args.add_targets,
+                args.presets if args.presets is not None else config.presets,
+                (args.add_targets or []) + config.add_targets,
             ),
             filesystem=create_cleaner(backend, distribution),
             wsl_workspace_path=wsl_workspace_path,
             dry_run=args.dry_run,
-            depth=args.depth,
-            exclude=args.excludes,
+            depth=args.depth if args.depth is not None else config.depth or 1,
+            exclude=(args.excludes or []) + config.exclude,
         )
 
         return CLI().run(
@@ -185,6 +223,10 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\nCancelled.", file=sys.stderr)
         return 130
+
+    except ConfigError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
 
     except (NotADirectoryError, ValueError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)

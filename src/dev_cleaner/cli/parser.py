@@ -78,7 +78,6 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--depth",
         type=positive_int,
-        default=1,
         metavar="N",
         help="How many directory levels to scan for projects. Defaults to 1.",
     )
@@ -91,6 +90,26 @@ def create_parser() -> argparse.ArgumentParser:
         help=(
             "Skip projects whose relative path or name matches the glob. Repeatable."
         ),
+    )
+
+    config = parser.add_mutually_exclusive_group()
+
+    config.add_argument(
+        "--config",
+        metavar="PATH",
+        help="Configuration file. Defaults to <workspace>/.dev-cleaner.toml.",
+    )
+
+    config.add_argument(
+        "--no-config",
+        action="store_true",
+        help="Ignore the workspace configuration file.",
+    )
+
+    parser.add_argument(
+        "--init",
+        action="store_true",
+        help="Write a commented .dev-cleaner.toml and exit.",
     )
 
     parser.add_argument(

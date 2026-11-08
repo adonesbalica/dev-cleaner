@@ -43,8 +43,8 @@ class ParserTests(unittest.TestCase):
 
         self.assertEqual(args.add_targets, ["coverage"])
 
-    def test_depth_defaults_to_one(self):
-        self.assertEqual(parse("-w", ".").depth, 1)
+    def test_depth_is_unset_by_default(self):
+        self.assertIsNone(parse("-w", ".").depth)
 
     def test_depth_accepts_a_positive_integer(self):
         self.assertEqual(parse("-w", ".", "--depth", "3").depth, 3)
