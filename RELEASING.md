@@ -1,6 +1,6 @@
 # Releasing
 
-The distribution name is `devcleaner` on PyPI, the import package is `dev_cleaner`, and the installed command is `dev-cleaner`.
+The distribution name is `devcleaner-cli` on PyPI, the import package is `dev_cleaner`, and the installed command is `dev-cleaner`.
 
 ## 1. Bump the version
 
@@ -24,13 +24,13 @@ python -m build
 Install the wheel in a clean virtual environment and run it from another directory:
 
 ```bash
-python -m venv /tmp/devcleaner-check
-/tmp/devcleaner-check/bin/pip install dist/devcleaner-*.whl
+python -m venv /tmp/devcleaner-cli-check
+/tmp/devcleaner-cli-check/bin/pip install dist/devcleaner_cli-*.whl
 cd /tmp
-/tmp/devcleaner-check/bin/dev-cleaner --version
+/tmp/devcleaner-cli-check/bin/dev-cleaner --version
 ```
 
-On Windows, use `%TEMP%\devcleaner-check\Scripts\...` instead.
+On Windows, use `%TEMP%\devcleaner-cli-check\Scripts\...` instead.
 
 ## 3. Test on TestPyPI (optional)
 
@@ -38,14 +38,14 @@ Create a token at <https://test.pypi.org/manage/account/token/> and run:
 
 ```bash
 python -m twine upload --repository testpypi dist/*
-python -m pip install --index-url https://test.pypi.org/simple/ --no-deps devcleaner
+python -m pip install --index-url https://test.pypi.org/simple/ --no-deps devcleaner-cli
 ```
 
 ## 4. Publish with GitHub Actions (recommended)
 
 `.github/workflows/release.yml` builds and publishes when a `v*` tag is pushed, using PyPI trusted publishing (OIDC), so no token is stored in the repository.
 
-Configure the trusted publisher once at <https://pypi.org/manage/project/devcleaner/settings/publishing/>:
+Configure the trusted publisher once at <https://pypi.org/manage/project/devcleaner-cli/settings/publishing/>:
 
 - Owner: `adonesbalica`
 - Repository: `dev-cleaner`

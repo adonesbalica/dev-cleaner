@@ -28,7 +28,7 @@ A lightweight, cross-platform CLI tool to clean unnecessary directories from dev
 - **Safe by default:** asks for confirmation, supports `--dry-run`, skips symlinks and junctions, and refuses to scan a filesystem root.
 - **Per-operation reporting:** failures are reported per project instead of aborting the whole run.
 - **Live progress:** a spinner and elapsed timer show that a long cleanup is still running.
-- **Installable:** published on PyPI as `devcleaner` and exposes the `dev-cleaner` command.
+- **Installable:** published on PyPI as `devcleaner-cli` and exposes the `dev-cleaner` command.
 - **No dependencies:** the CLI uses only the Python standard library.
 
 ## Supported environments
@@ -52,24 +52,24 @@ No third-party packages are required.
 
 ## Installation
 
-The package is published on PyPI as [`devcleaner`](https://pypi.org/project/devcleaner/) and installs the `dev-cleaner` command.
+The package is published on PyPI as [`devcleaner-cli`](https://pypi.org/project/devcleaner-cli/) and installs the `dev-cleaner` command.
 
 **pipx (recommended for CLI tools):**
 
 ```bash
-pipx install devcleaner
+pipx install devcleaner-cli
 ```
 
 **uv:**
 
 ```bash
-uv tool install devcleaner
+uv tool install devcleaner-cli
 ```
 
 **pip:**
 
 ```bash
-python -m pip install --user devcleaner
+python -m pip install --user devcleaner-cli
 ```
 
 On Windows, install pipx with `py -m pip install --user pipx` and run `py -m pipx ensurepath`, then reopen the terminal.
@@ -364,7 +364,7 @@ ruff format --check src
 python -m build
 ```
 
-The build writes `dist/devcleaner-<version>-py3-none-any.whl` and a source archive. See [RELEASING.md](https://github.com/adonesbalica/dev-cleaner/blob/main/RELEASING.md) for the publish steps.
+The build writes `dist/devcleaner_cli-<version>-py3-none-any.whl` and a source archive. See [RELEASING.md](https://github.com/adonesbalica/dev-cleaner/blob/main/RELEASING.md) for the publish steps.
 
 ## Project structure
 
@@ -432,7 +432,7 @@ Use `--dry-run` first to review what will be removed. Symlinked projects and tar
 | Paths with spaces do not work | Quote the path: `-w "C:/Users/me/My Projects"`. |
 | Colors look wrong or appear as escape codes | Set `NO_COLOR=1`, or use a terminal with ANSI support. |
 | No spinner or timer appears | The spinner is TTY-only. It is hidden when output is piped or redirected, and when `TERM=dumb`. Run the tool directly in a terminal to see it. |
-| `dev-cleaner` is not recognized | Install it with `pipx install devcleaner` or `uv tool install devcleaner`, then reopen the terminal so `PATH` is updated. You can always run `python -m dev_cleaner` instead. |
+| `dev-cleaner` is not recognized | Install it with `pipx install devcleaner-cli` or `uv tool install devcleaner-cli`, then reopen the terminal so `PATH` is updated. You can always run `python -m dev_cleaner` instead. |
 
 ## License
 
