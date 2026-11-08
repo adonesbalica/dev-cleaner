@@ -26,6 +26,7 @@ A lightweight, cross-platform CLI tool to clean unnecessary directories from dev
 - **Configurable targets:** defaults to `node_modules`, `.next`, and `dist`, and accepts custom targets.
 - **Safe by default:** asks for confirmation, supports `--dry-run`, skips symlinks and junctions, and refuses to scan a filesystem root.
 - **Per-operation reporting:** failures are reported per project instead of aborting the whole run.
+- **Live progress:** a spinner and elapsed timer show that a long cleanup is still running.
 - **No dependencies:** the CLI uses only the Python standard library.
 
 ## Supported environments
@@ -139,6 +140,14 @@ removed      app-b/.next
 
 3 removed (3 projects)
 ```
+
+On a real terminal, a single-line spinner and timer appear while the directories are removed, so a slow cleanup never looks frozen:
+
+```text
+| cleaning app-a (1/3) 0:04
+```
+
+The line is erased when the run finishes, and the summary appends the total time when it took at least one second (for example `3 removed (3 projects) in 0:04`). When the output is piped or redirected, the spinner is skipped and only the final lines are written, which keeps the output easy to parse.
 
 Without `-y`, the tool asks first:
 
@@ -254,6 +263,20 @@ python -m src.main -w <workspace> [options]
 | `-y`, `--yes` | Do not ask for confirmation. |
 | `--version` | Show the version and exit. |
 
+### Progress indicator
+
+While scanning or deleting, the CLI shows one animated line with the current project and an elapsed timer:
+
+```text
+/ cleaning app-a (2/7) 0:12
+```
+
+- The spinner uses plain ASCII frames (`|`, `/`, `-`, `\`), so it works in any terminal.
+- The timer uses `m:ss`, switching to `h:mm:ss` after one hour.
+- The line is cleared before the per-directory results are printed.
+- The summary appends `in m:ss` when the run took at least one second.
+- The spinner is **TTY-only**. Piped or redirected output never contains the animation, so logs and scripts stay clean.
+
 ### Exit codes
 
 | Code | Meaning |
@@ -307,7 +330,7 @@ The project uses a strategy-based architecture to separate cleanup orchestration
 - **`WslCleaner`:** runs `wsl -d <distribution> -- rm -rf` to remove directories inside a Linux filesystem from Windows.
 - **`Cleaner`:** handles workspace scanning, project detection, WSL path mapping, dry runs, and cleanup orchestration.
 - **`main.py`:** detects the backend, resolves the workspace paths, and wires everything together.
-- **`cli/`:** parses arguments and prints plain-text results, a summary, and the confirmation prompt. No third-party dependencies.
+- **`cli/`:** parses arguments, shows the TTY-only spinner and timer, and prints plain-text results, a summary, and the confirmation prompt. No third-party dependencies.
 
 This design allows new filesystem cleanup implementations to be added without changing the core cleanup logic.
 
@@ -335,6 +358,7 @@ Use `--dry-run` first to review what will be removed. Symlinked projects and tar
 | Nothing is removed | Only direct children of the workspace are scanned. Point `-w` at the folder containing your project folders. |
 | Paths with spaces do not work | Quote the path: `-w "C:/Users/me/My Projects"`. |
 | Colors look wrong or appear as escape codes | Set `NO_COLOR=1`, or use a terminal with ANSI support. |
+| No spinner or timer appears | The spinner is TTY-only. It is hidden when output is piped or redirected, and when `TERM=dumb`. Run the tool directly in a terminal to see it. |
 
 ## License
 
