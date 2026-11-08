@@ -3,12 +3,12 @@ import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
-from src.cleaners.base import FileSystemCleaner
-from src.cleaners.native import NativeCleaner
-from src.cleaners.wsl import WslCleaner
-from src.cli.interface import CLI
-from src.cli.parser import DEFAULT_TARGETS, create_parser
-from src.core.cleaner import Cleaner
+from dev_cleaner.cleaners.base import FileSystemCleaner
+from dev_cleaner.cleaners.native import NativeCleaner
+from dev_cleaner.cleaners.wsl import WslCleaner
+from dev_cleaner.cli.interface import CLI
+from dev_cleaner.cli.parser import DEFAULT_TARGETS, create_parser
+from dev_cleaner.core.cleaner import Cleaner
 
 DEFAULT_DISTRIBUTION = "Ubuntu"
 WSL_UNC_HOST = "wsl.localhost"

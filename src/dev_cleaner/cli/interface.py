@@ -4,8 +4,8 @@ import threading
 import time
 from typing import TextIO
 
-from src import __version__
-from src.core.cleaner import Cleaner, CleanupReport
+from dev_cleaner import __version__
+from dev_cleaner.core.cleaner import Cleaner, CleanupReport
 
 GREEN = "32"
 RED = "31"
