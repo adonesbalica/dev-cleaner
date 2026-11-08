@@ -12,6 +12,7 @@ A lightweight, cross-platform CLI tool to clean unnecessary directories from dev
 - [Installation](#installation)
 - [Tutorial](#tutorial)
 - [Usage](#usage)
+- [Development](#development)
 - [Project structure](#project-structure)
 - [Architecture](#architecture)
 - [Safety](#safety)
@@ -27,6 +28,7 @@ A lightweight, cross-platform CLI tool to clean unnecessary directories from dev
 - **Safe by default:** asks for confirmation, supports `--dry-run`, skips symlinks and junctions, and refuses to scan a filesystem root.
 - **Per-operation reporting:** failures are reported per project instead of aborting the whole run.
 - **Live progress:** a spinner and elapsed timer show that a long cleanup is still running.
+- **Installable:** published on PyPI as `devcleaner` and exposes the `dev-cleaner` command.
 - **No dependencies:** the CLI uses only the Python standard library.
 
 ## Supported environments
@@ -50,22 +52,43 @@ No third-party packages are required.
 
 ## Installation
 
-Clone the repository:
+The package is published on PyPI as [`devcleaner`](https://pypi.org/project/devcleaner/) and installs the `dev-cleaner` command.
+
+**pipx (recommended for CLI tools):**
+
+```bash
+pipx install devcleaner
+```
+
+**uv:**
+
+```bash
+uv tool install devcleaner
+```
+
+**pip:**
+
+```bash
+python -m pip install --user devcleaner
+```
+
+On Windows, install pipx with `py -m pip install --user pipx` and run `py -m pipx ensurepath`, then reopen the terminal.
+
+**From source:**
 
 ```bash
 git clone https://github.com/adonesbalica/dev-cleaner.git
 cd dev-cleaner
+pipx install .
 ```
 
-That is all. The tool uses only the Python standard library, so no dependencies need to be installed.
-
-Run it from the repository root, because the entry point is the `src` package:
+After installing, `dev-cleaner` works from any directory:
 
 ```bash
-python -m src.main --help
+dev-cleaner --version
 ```
 
-On Linux, use `python3` instead of `python` if your distribution does not provide a `python` command.
+If the command is not found, reopen the terminal so the updated `PATH` is loaded, or run `python -m dev_cleaner`. The package has no runtime dependencies.
 
 ## Tutorial
 
@@ -98,13 +121,13 @@ You now have three projects: `app-a` and `app-b` contain generated directories, 
 **Windows:**
 
 ```powershell
-python -m src.main -w $demo -n
+dev-cleaner -w $demo -n
 ```
 
 **Linux or WSL:**
 
 ```bash
-python -m src.main -w "$demo" -n
+dev-cleaner -w "$demo" -n
 ```
 
 Expected output:
@@ -126,7 +149,7 @@ The first line shows the tool version, the selected backend, and the workspace y
 Drop `-n` and add `-y` to skip the confirmation prompt:
 
 ```bash
-python -m src.main -w "$demo" -y
+dev-cleaner -w "$demo" -y
 ```
 
 Expected output:
@@ -196,13 +219,13 @@ Use the Linux path of the workspace. The tool detects that it is not a Windows p
 wsl -l -q
 
 # Preview the cleanup
-python -m src.main -w /home/me/workspace -n
+dev-cleaner -w /home/me/workspace -n
 
 # Use a specific distribution if the default is not the right one
-python -m src.main -w /home/me/workspace -d Ubuntu -n
+dev-cleaner -w /home/me/workspace -d Ubuntu -n
 
 # Run it
-python -m src.main -w /home/me/workspace -y
+dev-cleaner -w /home/me/workspace -y
 ```
 
 The header shows which backend and distribution were selected:
@@ -218,7 +241,7 @@ You can also pass a Windows UNC path such as `//wsl.localhost/Ubuntu/home/me/wor
 Passing `-t` **replaces** the default target list, so list every directory you want to remove:
 
 ```bash
-python -m src.main -w /home/me/workspace -t node_modules -t .venv -t target -n
+dev-cleaner -w /home/me/workspace -t node_modules -t .venv -t target -n
 ```
 
 This removes only `node_modules`, `.venv`, and `target`; it does not also remove `.next` or `dist`.
@@ -230,7 +253,7 @@ Use `-y` so the command never waits for input, and check the exit code:
 **Bash:**
 
 ```bash
-python -m src.main -w /home/me/workspace -y
+dev-cleaner -w /home/me/workspace -y
 if [ $? -ne 0 ]; then
     echo "cleanup failed" >&2
 fi
@@ -239,7 +262,7 @@ fi
 **PowerShell:**
 
 ```powershell
-python -m src.main -w C:/Users/me/workspace -y
+dev-cleaner -w C:/Users/me/workspace -y
 if ($LASTEXITCODE -ne 0) {
     Write-Error "cleanup failed"
 }
@@ -248,7 +271,7 @@ if ($LASTEXITCODE -ne 0) {
 ## Usage
 
 ```bash
-python -m src.main -w <workspace> [options]
+dev-cleaner -w <workspace> [options]
 ```
 
 ### Options
@@ -297,28 +320,77 @@ While scanning or deleting, the CLI shows one animated line with the directory b
 
 Only direct children of the workspace are treated as projects, and only direct children of each project are removed. Symlinked projects and targets, as well as Windows directory junctions, are skipped.
 
+## Development
+
+Clone the repository and create a virtual environment:
+
+```bash
+git clone https://github.com/adonesbalica/dev-cleaner.git
+cd dev-cleaner
+python -m venv .venv
+```
+
+Activate it:
+
+**Windows (PowerShell):**
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+**Linux / WSL:**
+
+```bash
+source .venv/bin/activate
+```
+
+Install the package in editable mode with the development tools:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+Run the CLI without the console script:
+
+```bash
+python -m dev_cleaner --help
+```
+
+Run the checks and build the distribution:
+
+```bash
+ruff check src
+ruff format --check src
+python -m build
+```
+
+The build writes `dist/devcleaner-<version>-py3-none-any.whl` and a source archive. See [RELEASING.md](https://github.com/adonesbalica/dev-cleaner/blob/main/RELEASING.md) for the publish steps.
+
 ## Project structure
 
 ```text
 dev-cleaner/
 ├── src/
-│   ├── __init__.py
-│   ├── main.py
-│   ├── core/
-│   │   ├── __init__.py
-│   │   └── cleaner.py
-│   ├── cleaners/
-│   │   ├── __init__.py
-│   │   ├── base.py
-│   │   ├── native.py
-│   │   └── wsl.py
-│   └── cli/
+│   └── dev_cleaner/
 │       ├── __init__.py
-│       ├── interface.py
-│       └── parser.py
-├── requirements.txt
+│       ├── __main__.py
+│       ├── main.py
+│       ├── core/
+│       │   ├── __init__.py
+│       │   └── cleaner.py
+│       ├── cleaners/
+│       │   ├── __init__.py
+│       │   ├── base.py
+│       │   ├── native.py
+│       │   └── wsl.py
+│       └── cli/
+│           ├── __init__.py
+│           ├── interface.py
+│           └── parser.py
 ├── pyproject.toml
 ├── README.md
+├── RELEASING.md
+├── LICENSE
 └── .gitignore
 ```
 
@@ -360,6 +432,7 @@ Use `--dry-run` first to review what will be removed. Symlinked projects and tar
 | Paths with spaces do not work | Quote the path: `-w "C:/Users/me/My Projects"`. |
 | Colors look wrong or appear as escape codes | Set `NO_COLOR=1`, or use a terminal with ANSI support. |
 | No spinner or timer appears | The spinner is TTY-only. It is hidden when output is piped or redirected, and when `TERM=dumb`. Run the tool directly in a terminal to see it. |
+| `dev-cleaner` is not recognized | Install it with `pipx install devcleaner` or `uv tool install devcleaner`, then reopen the terminal so `PATH` is updated. You can always run `python -m dev_cleaner` instead. |
 
 ## License
 

@@ -1,6 +1,6 @@
 import argparse
 
-from src import __version__
+from dev_cleaner import __version__
 
 DEFAULT_TARGETS = [
     "node_modules",

@@ -3,7 +3,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
-from src.cleaners.base import FileSystemCleaner
+from dev_cleaner.cleaners.base import FileSystemCleaner
 
 
 def is_link(path: Path) -> bool:
