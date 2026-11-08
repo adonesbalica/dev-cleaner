@@ -7,7 +7,8 @@ from dev_cleaner.cleaners.base import FileSystemCleaner
 from dev_cleaner.cleaners.native import NativeCleaner
 from dev_cleaner.cleaners.wsl import WslCleaner
 from dev_cleaner.cli.interface import CLI
-from dev_cleaner.cli.parser import DEFAULT_TARGETS, create_parser
+from dev_cleaner.cli.parser import create_parser
+from dev_cleaner.core.catalog import resolve_targets
 from dev_cleaner.core.cleaner import Cleaner
 
 DEFAULT_DISTRIBUTION = "Ubuntu"
@@ -140,7 +141,15 @@ def resolve_workspace(
 
 
 def main() -> int:
-    args = create_parser().parse_args()
+    parser = create_parser()
+    args = parser.parse_args()
+
+    if args.list_presets:
+        CLI().show_presets()
+        return 0
+
+    if not args.workspace:
+        parser.error("the following arguments are required: -w/--workspace")
 
     try:
         backend = args.backend or detect_backend(args.workspace)
@@ -153,7 +162,11 @@ def main() -> int:
 
         cleaner = Cleaner(
             workspace_path=workspace_path,
-            target_folders=args.targets or DEFAULT_TARGETS,
+            target_folders=resolve_targets(
+                args.targets,
+                args.presets,
+                args.add_targets,
+            ),
             filesystem=create_cleaner(backend, distribution),
             wsl_workspace_path=wsl_workspace_path,
             dry_run=args.dry_run,

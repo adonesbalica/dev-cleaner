@@ -1,12 +1,9 @@
 import argparse
 
 from dev_cleaner import __version__
+from dev_cleaner.core.catalog import PRESETS
 
-DEFAULT_TARGETS = [
-    "node_modules",
-    ".next",
-    "dist",
-]
+PRESET_NAMES = ", ".join(sorted(PRESETS))
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -15,9 +12,9 @@ def create_parser() -> argparse.ArgumentParser:
         description="Remove generated directories from every project in a workspace.",
         epilog=(
             "examples:\n"
-            "  python -m src.main -w C:/Users/me/workspace\n"
-            "  python -m src.main -w /home/me/workspace -n\n"
-            "  python -m src.main -w /home/me/workspace -t node_modules -t .venv -y\n"
+            "  dev-cleaner -w C:/Users/me/workspace\n"
+            "  dev-cleaner -w /home/me/workspace -n\n"
+            "  dev-cleaner -w /home/me/workspace --preset node --preset python -y\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -25,21 +22,45 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-w",
         "--workspace",
-        required=True,
         metavar="PATH",
         help="Workspace directory to scan.",
     )
 
-    parser.add_argument(
+    targets = parser.add_mutually_exclusive_group()
+
+    targets.add_argument(
         "-t",
         "--target",
         action="append",
         dest="targets",
         metavar="DIR",
+        help=("Directory to remove. Repeatable. Replaces the defaults and any preset."),
+    )
+
+    targets.add_argument(
+        "--preset",
+        action="append",
+        dest="presets",
+        choices=sorted(PRESETS),
+        metavar="NAME",
         help=(
-            "Directory to remove. Repeatable. "
-            f"Defaults to: {', '.join(DEFAULT_TARGETS)}."
+            "Preset group of directories to remove. Repeatable. "
+            f"Choices: {PRESET_NAMES}. Adds to the defaults."
         ),
+    )
+
+    parser.add_argument(
+        "--add-target",
+        action="append",
+        dest="add_targets",
+        metavar="DIR",
+        help="Directory to add to the defaults, -t, or --preset. Repeatable.",
+    )
+
+    parser.add_argument(
+        "--list-presets",
+        action="store_true",
+        help="List the available presets and exit.",
     )
 
     parser.add_argument(

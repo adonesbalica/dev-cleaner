@@ -1,10 +1,12 @@
 import os
 import sys
+import textwrap
 import threading
 import time
 from typing import TextIO
 
 from dev_cleaner import __version__
+from dev_cleaner.core.catalog import DEFAULT_TARGETS, PRESETS
 from dev_cleaner.core.cleaner import Cleaner, CleanupReport
 
 GREEN = "32"
@@ -91,6 +93,15 @@ def shorten(text: str, width: int = STATUS_PROJECT_WIDTH) -> str:
     return text[: width - 3] + "..."
 
 
+def summarize_targets(targets: list[str], limit: int = 6) -> str:
+    if len(targets) <= limit:
+        return ", ".join(targets)
+
+    remaining = len(targets) - limit
+
+    return f"{', '.join(targets[:limit])} and {remaining} more"
+
+
 class Spinner:
     """Single-line spinner with an elapsed timer, rendered only on a TTY."""
 
@@ -168,8 +179,28 @@ class CLI:
 
         print(f"{version} | {label} | {workspace}", file=self.out)
 
+    def show_presets(self) -> None:
+        width = max(len(name) for name in PRESETS)
+        indent = " " * (width + 4)
+
+        print("presets:", file=self.out)
+
+        for name in sorted(PRESETS):
+            lines = textwrap.wrap(
+                ", ".join(PRESETS[name]),
+                width=88 - len(indent),
+                break_on_hyphens=False,
+            )
+            print(f"  {name:<{width}}  {lines[0]}", file=self.out)
+
+            for line in lines[1:]:
+                print(f"{indent}{line}", file=self.out)
+
+        print(file=self.out)
+        print(f"defaults: {', '.join(DEFAULT_TARGETS)}", file=self.out)
+
     def confirm(self, targets: list[str]) -> bool:
-        names = ", ".join(targets)
+        names = summarize_targets(targets)
 
         self.out.write(f"Remove {names} from every project? [y/N] ")
         self.out.flush()
