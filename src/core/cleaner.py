@@ -138,6 +138,7 @@ class Cleaner:
     def run(
         self,
         on_progress: Callable[[int, int, Path], None] | None = None,
+        on_start: Callable[[int, int, Path], None] | None = None,
     ) -> CleanupReport:
         projects = self.get_projects()
 
@@ -146,6 +147,9 @@ class Cleaner:
         )
 
         for index, project in enumerate(projects, start=1):
+            if on_start:
+                on_start(index, len(projects), project)
+
             report.results.extend(self.clean_project(project))
 
             if on_progress:

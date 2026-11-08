@@ -1,5 +1,7 @@
 import os
 import sys
+import threading
+import time
 from typing import TextIO
 
 from src import __version__
@@ -12,6 +14,10 @@ CYAN = "36"
 DIM = "2"
 
 LABEL_WIDTH = 12
+SPINNER_FRAMES = "|/-\\"
+SPINNER_INTERVAL = 0.1
+SPINNER_DELAY = 0.2
+STATUS_NAME_WIDTH = 28
 
 
 def _enable_windows_ansi(stream: TextIO) -> None:
@@ -58,6 +64,82 @@ def plural(count: int, word: str) -> str:
     suffix = "" if count == 1 else "s"
 
     return f"{count} {word}{suffix}"
+
+
+def supports_animation(stream: TextIO) -> bool:
+    if os.environ.get("TERM") == "dumb":
+        return False
+
+    return hasattr(stream, "isatty") and stream.isatty()
+
+
+def format_elapsed(seconds: float) -> str:
+    total = int(seconds)
+    minutes, secs = divmod(total, 60)
+    hours, minutes = divmod(minutes, 60)
+
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+
+    return f"{minutes}:{secs:02d}"
+
+
+def shorten(text: str, width: int = STATUS_NAME_WIDTH) -> str:
+    if len(text) <= width:
+        return text
+
+    return text[: width - 3] + "..."
+
+
+class Spinner:
+    """Single-line spinner with an elapsed timer, rendered only on a TTY."""
+
+    def __init__(self, stream: TextIO, enabled: bool):
+        self.stream = stream
+        self.enabled = enabled
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._status = ""
+        self._start = 0.0
+        self._width = 0
+
+    def __enter__(self) -> "Spinner":
+        self._start = time.monotonic()
+
+        if self.enabled:
+            self._thread = threading.Thread(target=self._spin, daemon=True)
+            self._thread.start()
+
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self._stop.set()
+
+        if self._thread is not None:
+            self._thread.join()
+
+        if self._width:
+            self.stream.write("\r" + " " * self._width + "\r")
+            self.stream.flush()
+
+    def update(self, status: str) -> None:
+        self._status = status
+
+    def _spin(self) -> None:
+        index = 0
+
+        while not self._stop.wait(SPINNER_INTERVAL):
+            if time.monotonic() - self._start < SPINNER_DELAY:
+                continue
+
+            elapsed = format_elapsed(time.monotonic() - self._start)
+            frame = SPINNER_FRAMES[index % len(SPINNER_FRAMES)]
+            line = f"{frame} {self._status} {elapsed}"
+
+            self._width = max(self._width, len(line))
+            self.stream.write("\r" + line.ljust(self._width))
+            self.stream.flush()
+            index += 1
 
 
 class CLI:
@@ -120,7 +202,12 @@ class CLI:
 
             print(f"{label} {path}", file=self.out)
 
-    def show_summary(self, report: CleanupReport, dry_run: bool = False) -> None:
+    def show_summary(
+        self,
+        report: CleanupReport,
+        dry_run: bool = False,
+        elapsed: float | None = None,
+    ) -> None:
         projects = plural(report.projects_scanned, "project")
         removed = len(report.removed)
         failed = len(report.failed)
@@ -131,6 +218,9 @@ class CLI:
             summary = f"{removed} removed, {failed} failed ({projects})"
         else:
             summary = f"{removed} removed ({projects})"
+
+        if elapsed is not None and not dry_run and elapsed >= 1.0:
+            summary += f" in {format_elapsed(elapsed)}"
 
         code = YELLOW if failed else GREEN
 
@@ -154,7 +244,22 @@ class CLI:
 
             print(file=self.out)
 
-        report = cleaner.run()
+        action = "scanning" if cleaner.dry_run else "cleaning"
+        start = time.monotonic()
+
+        with Spinner(
+            self.out,
+            enabled=supports_animation(self.out),
+        ) as spinner:
+            spinner.update(f"{action}...")
+
+            def on_start(current: int, total: int, project) -> None:
+                name = shorten(project.name)
+                spinner.update(f"{action} {name} ({current}/{total})")
+
+            report = cleaner.run(on_start=on_start)
+
+        elapsed = time.monotonic() - start
 
         if not report.results:
             print("no matching directories", file=self.out)
@@ -162,6 +267,6 @@ class CLI:
 
         self.show_results(report, dry_run=cleaner.dry_run)
         print(file=self.out)
-        self.show_summary(report, dry_run=cleaner.dry_run)
+        self.show_summary(report, dry_run=cleaner.dry_run, elapsed=elapsed)
 
         return 1 if report.failed else 0
