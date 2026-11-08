@@ -98,7 +98,11 @@ class Cleaner:
             if item.is_dir() and not is_link(item)
         ]
 
-    def clean_project(self, project: Path) -> list[CleanupResult]:
+    def clean_project(
+        self,
+        project: Path,
+        on_target: Callable[[Path, str], None] | None = None,
+    ) -> list[CleanupResult]:
         results = []
 
         for target in self.target_folders:
@@ -106,6 +110,9 @@ class Cleaner:
 
             if is_link(target_path) or not target_path.is_dir():
                 continue
+
+            if on_target:
+                on_target(project, target)
 
             try:
                 removal_path = self._removal_path(target_path)
@@ -138,7 +145,7 @@ class Cleaner:
     def run(
         self,
         on_progress: Callable[[int, int, Path], None] | None = None,
-        on_start: Callable[[int, int, Path], None] | None = None,
+        on_target: Callable[[int, int, Path, str], None] | None = None,
     ) -> CleanupReport:
         projects = self.get_projects()
 
@@ -147,10 +154,16 @@ class Cleaner:
         )
 
         for index, project in enumerate(projects, start=1):
-            if on_start:
-                on_start(index, len(projects), project)
 
-            report.results.extend(self.clean_project(project))
+            def report_target(
+                target_project: Path,
+                target: str,
+                index: int = index,
+            ) -> None:
+                if on_target is not None:
+                    on_target(index, len(projects), target_project, target)
+
+            report.results.extend(self.clean_project(project, on_target=report_target))
 
             if on_progress:
                 on_progress(index, len(projects), project)

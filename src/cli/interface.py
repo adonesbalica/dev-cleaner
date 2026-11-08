@@ -17,7 +17,7 @@ LABEL_WIDTH = 12
 SPINNER_FRAMES = "|/-\\"
 SPINNER_INTERVAL = 0.1
 SPINNER_DELAY = 0.2
-STATUS_NAME_WIDTH = 28
+STATUS_PROJECT_WIDTH = 20
 
 
 def _enable_windows_ansi(stream: TextIO) -> None:
@@ -84,7 +84,7 @@ def format_elapsed(seconds: float) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def shorten(text: str, width: int = STATUS_NAME_WIDTH) -> str:
+def shorten(text: str, width: int = STATUS_PROJECT_WIDTH) -> str:
     if len(text) <= width:
         return text
 
@@ -253,11 +253,11 @@ class CLI:
         ) as spinner:
             spinner.update(f"{action}...")
 
-            def on_start(current: int, total: int, project) -> None:
-                name = shorten(project.name)
+            def on_target(current: int, total: int, project, target: str) -> None:
+                name = f"{shorten(project.name)}/{target}"
                 spinner.update(f"{action} {name} ({current}/{total})")
 
-            report = cleaner.run(on_start=on_start)
+            report = cleaner.run(on_target=on_target)
 
         elapsed = time.monotonic() - start
 
