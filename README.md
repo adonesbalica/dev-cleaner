@@ -2,31 +2,50 @@
 
 A lightweight, cross-platform CLI tool to clean unnecessary directories from development projects.
 
-`dev-cleaner` helps developers keep their workspaces clean by automatically detecting projects and removing generated or dependency directories such as `node_modules`, `.next`, `dist`, and more.
+`dev-cleaner` helps developers keep their workspaces clean by automatically detecting projects and removing generated or dependency directories such as `node_modules`, `.next`, and `dist`.
+
+## Table of contents
+
+- [Features](#features)
+- [Supported environments](#supported-environments)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Tutorial](#tutorial)
+- [Usage](#usage)
+- [Project structure](#project-structure)
+- [Architecture](#architecture)
+- [Safety](#safety)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ## Features
 
-- **Cross-platform support:** Runs on Windows and Linux.
-- **Configurable cleanup:** Choose which directories should be removed.
-- **Workspace scanning:** Automatically detects project directories inside a configured workspace.
-- **Multiple environments:** Supports native Windows and Linux filesystems, including WSL integration.
-- **YAML configuration:** Customize cleanup targets, workspace paths, and cleanup backends.
-- **Extensible architecture:** Separates core cleanup logic from filesystem-specific operations.
-- **Backend selection:** Uses the appropriate cleanup implementation for each environment.
+- **Cross-platform:** runs natively on Windows, Linux, and inside WSL.
+- **Automatic backend selection:** the right filesystem implementation is picked from the workspace path.
+- **Windows → WSL support:** clean Linux filesystems from Windows without leaving the terminal.
+- **Configurable targets:** defaults to `node_modules`, `.next`, and `dist`, and accepts custom targets.
+- **Safe by default:** asks for confirmation, supports `--dry-run`, skips symlinks and junctions, and refuses to scan a filesystem root.
+- **Per-operation reporting:** failures are reported per project instead of aborting the whole run.
+- **No dependencies:** the CLI uses only the Python standard library.
 
-## Supported Environments
+## Supported environments
 
-| Environment | Cleanup Backend | Description |
+| Where you run it | Workspace path | Backend |
 |---|---|---|
-| Windows | `NativeCleaner` | Removes directories using the Windows filesystem. |
-| Linux | `NativeCleaner` | Removes directories using the Linux filesystem. |
-| Windows + WSL | `WslCleaner` | Uses WSL commands to remove directories inside a Linux filesystem. |
+| Windows | `C:\Users\me\workspace` | `native` (Windows filesystem) |
+| Windows | `/home/me/workspace` | `wsl` (default distribution) |
+| Windows | `//wsl.localhost/Ubuntu/home/me/workspace` | `wsl` (distribution taken from the path) |
+| Linux | `/home/me/workspace` | `native` (Linux filesystem) |
+| Inside WSL | `/home/me/workspace` or `/mnt/c/...` | `native` (Linux filesystem) |
+
+The backend is detected automatically. Use `--backend` only to override the detection.
 
 ## Requirements
 
-- Python 3.10 or higher.
-- PyYAML.
-- WSL 2 with a Linux distribution such as Ubuntu (only when using WSL integration).
+- Python 3.12 or higher.
+- WSL 2 with a Linux distribution such as Ubuntu (only when cleaning a Linux filesystem from Windows).
+
+No third-party packages are required.
 
 ## Installation
 
@@ -37,119 +56,224 @@ git clone https://github.com/adonesbalica/dev-cleaner.git
 cd dev-cleaner
 ```
 
-Create and activate a virtual environment.
+That is all. The tool uses only the Python standard library, so no dependencies need to be installed.
+
+Run it from the repository root, because the entry point is the `src` package:
+
+```bash
+python -m src.main --help
+```
+
+On Linux, use `python3` instead of `python` if your distribution does not provide a `python` command.
+
+## Tutorial
+
+This walkthrough creates a throwaway workspace, so nothing real is deleted. It takes about two minutes.
+
+### 1. Create a practice workspace
 
 **Windows (PowerShell):**
 
 ```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+$demo = Join-Path $env:TEMP "dev-cleaner-demo"
+New-Item -ItemType Directory -Force "$demo\app-a\node_modules\react" | Out-Null
+New-Item -ItemType Directory -Force "$demo\app-a\dist" | Out-Null
+New-Item -ItemType Directory -Force "$demo\app-b\.next" | Out-Null
+New-Item -ItemType Directory -Force "$demo\app-c\src" | Out-Null
 ```
 
-**Linux:**
+**Linux or WSL:**
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+demo="$(mktemp -d)"
+mkdir -p "$demo/app-a/node_modules/react" "$demo/app-a/dist"
+mkdir -p "$demo/app-b/.next" "$demo/app-c/src"
 ```
 
-Install dependencies:
+You now have three projects: `app-a` and `app-b` contain generated directories, while `app-c` contains only source code.
+
+### 2. Preview the cleanup with a dry run
+
+**Windows:**
+
+```powershell
+python -m src.main -w $demo -n
+```
+
+**Linux or WSL:**
 
 ```bash
-python -m pip install -r requirements.txt
+python -m src.main -w "$demo" -n
 ```
 
-## Configuration
+Expected output:
 
-Configure the `config.yaml` file according to your environment.
+```text
+dev-cleaner 1.0.0 | native | <workspace>
 
-### Windows
+would remove app-a/node_modules
+would remove app-a/dist
+would remove app-b/.next
 
-For native Windows filesystem cleanup:
-
-```yaml
-name: dev-cleaner
-version: 1.0.0
-
-config:
-  target_folders:
-    - node_modules
-    - .next
-    - dist
-
-  workspace_path: 'C:/Users/user/workspace'
-  cleanup_backend: native
+3 matched (3 projects) [dry run]
 ```
 
-### Linux
+The first line shows the tool version, the selected backend, and the workspace you passed. Nothing has been deleted; the `[dry run]` marker confirms it. The order of the lines depends on the filesystem; the counts are what matter.
 
-For native Linux filesystem cleanup:
+### 3. Run the cleanup for real
 
-```yaml
-name: dev-cleaner
-version: 1.0.0
+Drop `-n` and add `-y` to skip the confirmation prompt:
 
-config:
-  target_folders:
-    - node_modules
-    - .next
-    - dist
-
-  workspace_path: '/home/user/workspace'
-  cleanup_backend: native
+```bash
+python -m src.main -w "$demo" -y
 ```
 
-### Windows + WSL
+Expected output:
 
-When running the application on Windows and cleaning projects stored inside WSL, configure both the Windows-accessible workspace path and the corresponding Linux workspace path:
+```text
+dev-cleaner 1.0.0 | native | <workspace>
 
-```yaml
-name: dev-cleaner
-version: 1.0.0
+removed      app-a/node_modules
+removed      app-a/dist
+removed      app-b/.next
 
-config:
-  target_folders:
-    - node_modules
-    - .next
-    - dist
-
-  workspace_path: '//wsl.localhost/Ubuntu/home/user/workspace'
-  cleanup_backend: wsl
-
-  wsl:
-    distribution: Ubuntu
-    workspace_path: '/home/user/workspace'
+3 removed (3 projects)
 ```
 
-**Configuration options:**
+Without `-y`, the tool asks first:
 
-| Option | Description |
-|---|---|
-| `target_folders` | Directories to remove from each detected project. |
-| `workspace_path` | Workspace path used to discover projects. |
-| `cleanup_backend` | Filesystem implementation: `native` or `wsl`. |
-| `wsl.distribution` | Name of the WSL distribution. |
-| `wsl.workspace_path` | Linux workspace path used for WSL cleanup. |
+```text
+Remove node_modules, .next, dist from every project? [y/N]
+```
 
-The `workspace_path` must use the path format accessible to the application. When using WSL integration from Windows, `wsl.workspace_path` must point to the equivalent directory inside Linux.
+Press `y` and Enter to continue, or Enter to cancel. The default is always **No**.
+
+### 4. Verify the result
+
+**Windows:**
+
+```powershell
+Get-ChildItem -Directory -Recurse $demo | Select-Object -ExpandProperty FullName
+```
+
+**Linux or WSL:**
+
+```bash
+find "$demo" -type d
+```
+
+Only `app-a`, `app-b`, and `app-c` (plus `app-c/src`) should remain. The generated directories are gone.
+
+### 5. Remove the practice workspace
+
+**Windows:**
+
+```powershell
+Remove-Item $demo -Recurse -Force
+```
+
+**Linux or WSL:**
+
+```bash
+rm -rf "$demo"
+```
+
+### Tutorial: clean a WSL workspace from Windows
+
+Use the Linux path of the workspace. The tool detects that it is not a Windows path and switches to the WSL backend automatically.
+
+```powershell
+# See which distributions are available
+wsl -l -q
+
+# Preview the cleanup
+python -m src.main -w /home/me/workspace -n
+
+# Use a specific distribution if the default is not the right one
+python -m src.main -w /home/me/workspace -d Ubuntu -n
+
+# Run it
+python -m src.main -w /home/me/workspace -y
+```
+
+The header shows which backend and distribution were selected:
+
+```text
+dev-cleaner 1.0.0 | wsl:Ubuntu | /home/me/workspace
+```
+
+You can also pass a Windows UNC path such as `//wsl.localhost/Ubuntu/home/me/workspace`; the distribution is read from the path.
+
+### Tutorial: use custom targets
+
+Passing `-t` **replaces** the default target list, so list every directory you want to remove:
+
+```bash
+python -m src.main -w /home/me/workspace -t node_modules -t .venv -t target -n
+```
+
+This removes only `node_modules`, `.venv`, and `target`; it does not also remove `.next` or `dist`.
+
+### Tutorial: use it in a script
+
+Use `-y` so the command never waits for input, and check the exit code:
+
+**Bash:**
+
+```bash
+python -m src.main -w /home/me/workspace -y
+if [ $? -ne 0 ]; then
+    echo "cleanup failed" >&2
+fi
+```
+
+**PowerShell:**
+
+```powershell
+python -m src.main -w C:/Users/me/workspace -y
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "cleanup failed"
+}
+```
 
 ## Usage
 
-Run the application from the project root:
-
 ```bash
-python -m src.main
+python -m src.main -w <workspace> [options]
 ```
 
-The application:
+### Options
 
-1. Loads the configuration from `config.yaml`.
-2. Selects the appropriate cleanup backend.
-3. Scans the configured workspace for project directories.
+| Option | Description |
+|---|---|
+| `-w`, `--workspace` | Workspace directory to scan. Required. |
+| `-t`, `--target` | Directory to remove. Repeatable; replaces the defaults. Defaults to `node_modules`, `.next`, `dist`. |
+| `-b`, `--backend` | Force `native` or `wsl`. Auto-detected by default. |
+| `-d`, `--distribution` | WSL distribution to use. Defaults to the WSL default distribution, or `Ubuntu`. |
+| `-n`, `--dry-run` | Show what would be removed without deleting anything. |
+| `-y`, `--yes` | Do not ask for confirmation. |
+| `--version` | Show the version and exit. |
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success, including "nothing to remove" and a cancelled prompt. |
+| `1` | Error: invalid workspace, invalid target, failed removal, or WSL unavailable. |
+| `2` | Invalid command-line arguments. |
+| `130` | Interrupted with Ctrl+C. |
+
+### How it works
+
+1. Detects the backend from the workspace path (unless `--backend` is given).
+2. Maps the workspace to a scan path and, for WSL, to the equivalent Linux path.
+3. Lists the direct children of the workspace as projects.
 4. Checks each project for the configured target directories.
-5. Removes matching directories using the selected backend.
+5. Removes matching directories using the selected backend, reporting every operation.
 
-## Project Structure
+Only direct children of the workspace are treated as projects, and only direct children of each project are removed. Symlinked projects and targets, as well as Windows directory junctions, are skipped.
+
+## Project structure
 
 ```text
 dev-cleaner/
@@ -159,13 +283,17 @@ dev-cleaner/
 │   ├── core/
 │   │   ├── __init__.py
 │   │   └── cleaner.py
-│   └── cleaners/
+│   ├── cleaners/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── native.py
+│   │   └── wsl.py
+│   └── cli/
 │       ├── __init__.py
-│       ├── base.py
-│       ├── native.py
-│       └── wsl.py
-├── config.yaml
+│       ├── interface.py
+│       └── parser.py
 ├── requirements.txt
+├── pyproject.toml
 ├── README.md
 └── .gitignore
 ```
@@ -174,11 +302,12 @@ dev-cleaner/
 
 The project uses a strategy-based architecture to separate cleanup orchestration from filesystem operations.
 
-- **`FileSystemCleaner`:** Defines the contract for filesystem cleanup implementations.
-- **`NativeCleaner`:** Uses Python's `shutil` module to remove directories from native filesystems.
-- **`WslCleaner`:** Uses `subprocess` to execute Linux removal commands through WSL.
-- **`Cleaner`:** Handles workspace scanning, project detection, and cleanup orchestration.
-- **`main.py`:** Loads configuration and initializes the appropriate cleanup backend.
+- **`FileSystemCleaner`:** defines the contract for filesystem cleanup implementations.
+- **`NativeCleaner`:** uses `shutil.rmtree` on the filesystem the application runs on (Windows or Linux), including retries for read-only files.
+- **`WslCleaner`:** runs `wsl -d <distribution> -- rm -rf` to remove directories inside a Linux filesystem from Windows.
+- **`Cleaner`:** handles workspace scanning, project detection, WSL path mapping, dry runs, and cleanup orchestration.
+- **`main.py`:** detects the backend, resolves the workspace paths, and wires everything together.
+- **`cli/`:** parses arguments and prints plain-text results, a summary, and the confirmation prompt. No third-party dependencies.
 
 This design allows new filesystem cleanup implementations to be added without changing the core cleanup logic.
 
@@ -188,12 +317,24 @@ Directory removal is permanent.
 
 Before running the application, make sure that:
 
-- The configured workspace path is correct.
+- The workspace path is correct.
 - The target directories are the ones you intend to remove.
-- The selected cleanup backend matches your environment.
-- The WSL distribution and Linux workspace path are configured correctly when using WSL integration.
+- The selected backend matches your environment.
 
-Always verify the configured paths before executing a cleanup.
+Use `--dry-run` first to review what will be removed. Symlinked projects and targets are skipped, and the tool refuses to scan a filesystem root. Only direct children of the workspace are considered, so pointing `-w` at a folder that contains projects is safer than pointing it at a single project.
+
+## Troubleshooting
+
+| Problem | Cause and fix |
+|---|---|
+| `Error: Workspace not found: ...` | The path is wrong, or the WSL distribution is not running. Check the path and run `wsl -l -q` to see available distributions. |
+| `Error: The wsl backend requires Windows with WSL installed.` | You forced `-b wsl` on Linux. Remove `-b wsl`; Linux paths already work with the native backend. |
+| `Error: Refusing to scan a filesystem root: ...` | Pass the folder that contains your projects, not `/`, `C:\`, or a WSL distribution root. |
+| `Error: Invalid target directory: ...` | Targets must be a single directory name. Do not use paths such as `src/dist` or `..`. |
+| `failed ... [WinError 32]` or `Permission denied` | A file is open or read-only. Close editors, dev servers, and terminals using the directory, then retry. |
+| Nothing is removed | Only direct children of the workspace are scanned. Point `-w` at the folder containing your project folders. |
+| Paths with spaces do not work | Quote the path: `-w "C:/Users/me/My Projects"`. |
+| Colors look wrong or appear as escape codes | Set `NO_COLOR=1`, or use a terminal with ANSI support. |
 
 ## License
 
