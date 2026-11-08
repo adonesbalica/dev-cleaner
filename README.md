@@ -144,7 +144,7 @@ removed      app-b/.next
 On a real terminal, a single-line spinner and timer appear while the directories are removed, so a slow cleanup never looks frozen:
 
 ```text
-| cleaning app-a (1/3) 0:04
+| cleaning app-a/node_modules (1/3) 0:04
 ```
 
 The line is erased when the run finishes, and the summary appends the total time when it took at least one second (for example `3 removed (3 projects) in 0:04`). When the output is piped or redirected, the spinner is skipped and only the final lines are written, which keeps the output easy to parse.
@@ -265,13 +265,14 @@ python -m src.main -w <workspace> [options]
 
 ### Progress indicator
 
-While scanning or deleting, the CLI shows one animated line with the current project and an elapsed timer:
+While scanning or deleting, the CLI shows one animated line with the directory being removed and an elapsed timer:
 
 ```text
-/ cleaning app-a (2/7) 0:12
+/ cleaning app-a/node_modules (2/7) 0:12
 ```
 
 - The spinner uses plain ASCII frames (`|`, `/`, `-`, `\`), so it works in any terminal.
+- The status updates before **each directory** is removed, so the name changes even when a single project takes a long time.
 - The timer uses `m:ss`, switching to `h:mm:ss` after one hour.
 - The line is cleared before the per-directory results are printed.
 - The summary appends `in m:ss` when the run took at least one second.
