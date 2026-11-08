@@ -7,5 +7,9 @@ config:
     - .next
     - dist
 
-  workspace_path: 'C:\Users\adone\OneDrive\Desktop\workspace'
-  cleanup_backend: native
+  workspace_path: '//wsl.localhost/Ubuntu/home/adonebalica/workspace'
+  cleanup_backend: wsl
+
+  wsl:
+    distribution: Ubuntu
+    workspace_path: '/home/adonebalica/workspace'
