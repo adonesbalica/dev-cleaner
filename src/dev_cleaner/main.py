@@ -170,6 +170,8 @@ def main() -> int:
             filesystem=create_cleaner(backend, distribution),
             wsl_workspace_path=wsl_workspace_path,
             dry_run=args.dry_run,
+            depth=args.depth,
+            exclude=args.excludes,
         )
 
         return CLI().run(

@@ -1,9 +1,12 @@
 import os
-from collections.abc import Callable
+from collections import deque
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
+from fnmatch import fnmatch
 from pathlib import Path, PurePosixPath
 
 from dev_cleaner.cleaners.base import FileSystemCleaner
+from dev_cleaner.core.catalog import PRUNE_DIRS
 
 
 def is_link(path: Path) -> bool:
@@ -48,15 +51,20 @@ class Cleaner:
         filesystem: FileSystemCleaner,
         wsl_workspace_path: str | None = None,
         dry_run: bool = False,
+        depth: int = 1,
+        exclude: list[str] | None = None,
     ):
         self.workspace_path = workspace_path
         self.target_folders = target_folders
         self.filesystem = filesystem
         self.wsl_workspace_path = wsl_workspace_path
         self.dry_run = dry_run
+        self.depth = depth
+        self.exclude = exclude or []
 
         self._validate_workspace()
         self._validate_targets()
+        self._validate_depth()
 
     def _validate_workspace(self) -> None:
         anchor = self.workspace_path.anchor
@@ -80,6 +88,10 @@ class Cleaner:
             ):
                 raise ValueError(f"Invalid target directory: {target}")
 
+    def _validate_depth(self) -> None:
+        if self.depth < 1:
+            raise ValueError("Depth must be at least 1.")
+
     def _removal_path(self, target_path: Path) -> Path | PurePosixPath:
         if self.wsl_workspace_path is None:
             return target_path
@@ -88,15 +100,52 @@ class Cleaner:
 
         return PurePosixPath(self.wsl_workspace_path, *relative_path.parts)
 
+    def project_label(self, project: Path) -> str:
+        return project.relative_to(self.workspace_path).as_posix()
+
+    def _is_excluded(self, relative_path: str) -> bool:
+        name = PurePosixPath(relative_path).name
+
+        return any(
+            fnmatch(relative_path, pattern) or fnmatch(name, pattern)
+            for pattern in self.exclude
+        )
+
+    def _iter_projects(self) -> Iterator[Path]:
+        queue: deque[tuple[Path, int]] = deque([(self.workspace_path, 0)])
+
+        while queue:
+            directory, level = queue.popleft()
+
+            if level >= self.depth:
+                continue
+
+            try:
+                children = sorted(
+                    (
+                        child
+                        for child in directory.iterdir()
+                        if child.is_dir() and not is_link(child)
+                    ),
+                    key=lambda child: child.name,
+                )
+            except OSError:
+                continue
+
+            for child in children:
+                relative_path = self.project_label(child)
+
+                if child.name in PRUNE_DIRS or self._is_excluded(relative_path):
+                    continue
+
+                yield child
+                queue.append((child, level + 1))
+
     def get_projects(self) -> list[Path]:
         if not self.workspace_path.is_dir():
             raise NotADirectoryError(f"Workspace not found: {self.workspace_path}")
 
-        return [
-            item
-            for item in self.workspace_path.iterdir()
-            if item.is_dir() and not is_link(item)
-        ]
+        return list(self._iter_projects())
 
     def clean_project(
         self,
@@ -104,6 +153,7 @@ class Cleaner:
         on_target: Callable[[Path, str], None] | None = None,
     ) -> list[CleanupResult]:
         results = []
+        project_name = self.project_label(project)
 
         for target in self.target_folders:
             target_path = project / target
@@ -122,7 +172,7 @@ class Cleaner:
 
                 results.append(
                     CleanupResult(
-                        project=project.name,
+                        project=project_name,
                         target=target,
                         path=removal_path,
                         success=True,
@@ -132,7 +182,7 @@ class Cleaner:
             except Exception as error:
                 results.append(
                     CleanupResult(
-                        project=project.name,
+                        project=project_name,
                         target=target,
                         path=target_path,
                         success=False,

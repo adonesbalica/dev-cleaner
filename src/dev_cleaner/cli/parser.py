@@ -6,6 +6,18 @@ from dev_cleaner.core.catalog import PRESETS
 PRESET_NAMES = ", ".join(sorted(PRESETS))
 
 
+def positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid integer: {value}") from None
+
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+
+    return number
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="dev-cleaner",
@@ -61,6 +73,24 @@ def create_parser() -> argparse.ArgumentParser:
         "--list-presets",
         action="store_true",
         help="List the available presets and exit.",
+    )
+
+    parser.add_argument(
+        "--depth",
+        type=positive_int,
+        default=1,
+        metavar="N",
+        help="How many directory levels to scan for projects. Defaults to 1.",
+    )
+
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        dest="excludes",
+        metavar="PATTERN",
+        help=(
+            "Skip projects whose relative path or name matches the glob. Repeatable."
+        ),
     )
 
     parser.add_argument(

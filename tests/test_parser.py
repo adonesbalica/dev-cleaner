@@ -43,6 +43,24 @@ class ParserTests(unittest.TestCase):
 
         self.assertEqual(args.add_targets, ["coverage"])
 
+    def test_depth_defaults_to_one(self):
+        self.assertEqual(parse("-w", ".").depth, 1)
+
+    def test_depth_accepts_a_positive_integer(self):
+        self.assertEqual(parse("-w", ".", "--depth", "3").depth, 3)
+
+    def test_depth_rejects_zero(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as context:
+                parse("-w", ".", "--depth", "0")
+
+        self.assertEqual(context.exception.code, 2)
+
+    def test_exclude_can_be_repeated(self):
+        args = parse("-w", ".", "--exclude", "legacy-*", "--exclude", "vendor")
+
+        self.assertEqual(args.excludes, ["legacy-*", "vendor"])
+
 
 class MainTests(unittest.TestCase):
     def test_list_presets_exits_zero_without_a_workspace(self):

@@ -285,7 +285,7 @@ class CLI:
             spinner.update(f"{action}...")
 
             def on_target(current: int, total: int, project, target: str) -> None:
-                name = f"{shorten(project.name)}/{target}"
+                name = f"{shorten(cleaner.project_label(project))}/{target}"
                 spinner.update(f"{action} {name} ({current}/{total})")
 
             report = cleaner.run(on_target=on_target)
